@@ -1,0 +1,205 @@
+-----------------------------------------------------------------------------------------------------------------------------------------
+local pickup = createPickup(1052.27, -316.342, 73.985, 3, 1210, 1)
+local ped = createPed(161, 1106.548, -299.728, 74.539, 90)
+local blip = createBlipAttachedTo(pickup, 42)
+setElementData(blip, "blipName", "Trabalho Leiteiro")
+markers = {}
+ordenhando = {}
+tick = {}
+tempo = {}
+for i, v in pairs(positions) do
+	markers[i] = createMarker(positions[i][1], positions[i][2], positions[i][3] -1, "cylinder", 1.25, 0, 195, 195, 50)
+	setElementVisibleTo(markers[i], root, false)
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+function InfoTrab(playerSource)
+	local emprego = getElementData(playerSource, "Emprego") or "Desempregado"
+	if emprego == "Leiteiro" then
+		exports["Infobox"]:addBox(playerSource, "info", "Siga a marcação em sua tela para chegar no seu local de trabalho")
+		triggerClientEvent(playerSource, "togglePoint", playerSource, 1052.27, -316.342, 73.985)
+	end
+end
+addCommandHandler("trabalho", InfoTrab)
+-----------------------------------------------------------------------------------------------------------------------------------------
+function startJob(playerSource)
+	if not isPedInVehicle(playerSource) then
+		local Emprego = getElementData(playerSource, "Emprego") or "Desempregado"
+		if Emprego == "Leiteiro" then
+			if not isElementVisibleTo(markers[1], playerSource) then
+				if exports["[HS]InventorySystem"]:getItem(playerSource, 23) >= 1 then
+					exports["Infobox"]:addBox(playerSource, "info", "Entre no cercado e vá ao lado de uma vaca para iniciar a ordenha")
+					outputChatBox(" ", playerSource, 0, 195, 195, true)
+					outputChatBox("[EMPREGO]:#FFFFFF Digite #FFFF00/cancelar #FFFFFF para cancelar seu trabalho.", playerSource, 0, 195, 195, true)
+            		addEventHandler("onPlayerQuit", playerSource, reset)
+            		addEventHandler("onPlayerWasted", playerSource, reset)
+            		for i, v in pairs(markers) do
+            			setElementVisibleTo(v, playerSource, true)
+            			addEventHandler("onMarkerHit", v, ordenhar1)
+            			addEventHandler("onMarkerLeave", v, ordenhar2)
+            		end
+            	else
+            		exports["Infobox"]:addBox(playerSource, "error", "Você precisa de uma 'Garrafa de Leite (vazia)' para este trabalho")
+            	end
+			else
+				exports["Infobox"]:addBox(playerSource,"error", "Você já está trabalhando. Digite '/cancelar' para encerrar.")
+			end
+		else
+			exports["Infobox"]:addBox(playerSource, "error", "Apenas leiteiros podem trabalhar aqui")
+		end
+	end
+end
+addEventHandler("onPickupHit", pickup, startJob)
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ordenhar1(playerSource)
+	if not isPedInVehicle(playerSource) then
+		local Emprego = getElementData(playerSource, "Emprego") or "Desempregado"
+		if Emprego == "Leiteiro" then
+			if getElementAlpha(source) ~= 0 then
+      if exports["[HS]InventorySystem"]:getItem(playerSource, 23) >= 1 then
+					exports["Infobox"]:addBox(playerSource, "info", "Pressione 'R' para ordenhar a vaca")
+					bindKey(playerSource, "r", "down", ordenhar3)
+					setElementAlpha(source, 0)
+					ordenhando[playerSource] = 0
+					tick[playerSource] = getTickCount()
+					outputChatBox(" ", playerSource, 0, 195, 195, true)
+					outputChatBox("[LEITEIRO]:#FFFFFF Garrafa de Leite =#FFFF00 0%", playerSource, 0, 195, 195, true)
+				else
+					exports["Infobox"]:addBox(playerSource, "error", "Você não possui 'Garrafa de Leite (vazia)' em sua mochila")
+				end
+			end
+		end
+	end
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ordenhar2(playerSource)
+	if not isPedInVehicle(playerSource) then
+		local Emprego = getElementData(playerSource, "Emprego") or "Desempregado"
+		if Emprego == "Leiteiro" then
+			if isKeyBound(playerSource, "r", "down", ordenhar3) then
+				if ordenhando[playerSource] < 100 then
+					setElementAlpha(source, 50)
+				end
+				unbindKey(playerSource, "r", "down", ordenhar3)
+				ordenhando[playerSource] = 0
+				tick[playerSource] = nil
+				setPedAnimation(playerSource, nil)
+			end
+		end
+	end
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ordenhar3(playerSource)
+	for _, v in pairs(markers) do
+		if isElementWithinMarker(playerSource, v) then
+			if (getTickCount() - tick[playerSource]) >= 500 then
+				ordenhando[playerSource] = ordenhando[playerSource] + 5
+				tick[playerSource] = getTickCount()
+				setPedAnimation(playerSource, "BOMBER", "BOM_Plant_Loop", 500, true, false, false, false, 500)
+				if ordenhando[playerSource] >= 100 then
+					if exports["[HS]InventorySystem"]:takeItem(playerSource, 23, 1) then
+						exports["[HS]InventorySystem"]:giveItem(playerSource, 24, 1)
+						local exp = math.random(exp1, exp2)
+						if getElementData(playerSource, "VIP") then
+							local xp = (exp + (exp/4))
+							triggerEvent("GiveExp", playerSource, playerSource, xp)
+						else
+							triggerEvent("GiveExp", playerSource, playerSource, exp)
+						end
+						exports["Infobox"]:addBox(playerSource, "success", "Você encheu a garrafa, agora vá até a casa do fazendeiro para vendê-la")
+						for _, players in pairs(getElementsByType("player")) do
+							local x, y, z = getElementPosition(playerSource)
+							local x2, y2, z2 = getElementPosition(players)
+							if getDistanceBetweenPoints3D(x, y, z, x2, y2, z2) <= 30 then
+								triggerClientEvent(players, "sound", resourceRoot, x, y, z)
+							end
+						end
+					else
+						exports["Infobox"]:addBox(playerSource, "error", "Você não possui 'Garrafa de Leite (vazia)' em sua mochila")
+					end
+					unbindKey(playerSource, "r", "down", ordenhar3)
+					tick[playerSource] = nil
+					tempo[v] = setTimer(function(v)
+						setElementAlpha(v, 50)
+					end, 60000, 1, v)
+				else
+					outputChatBox("[LEITEIRO]:#FFFFFF Garrafa de Leite = #FFFF00"..ordenhando[playerSource].."%", playerSource, 0, 195, 195, true)
+				end
+			end
+		end
+	end
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+function onClicked(button, state, playerSource)
+    local emprego = getElementData(playerSource, "Emprego")
+    if emprego == "Leiteiro" then
+		if button == "left" and state == "down" then
+			local x, y, z = getElementPosition(playerSource)
+			local x2, y2, z2 = getElementPosition(ped)
+			if getDistanceBetweenPoints3D(x, y, z, x2, y2, z2) <= 2 then
+				local quantidade = exports["[HS]InventorySystem"]:getItem(playerSource, 24)
+				if quantidade >= 1 then
+					exports["[HS]InventorySystem"]:takeItem(playerSource, 24, all)
+					givePlayerMoney(playerSource, money*quantidade)
+					exports["Infobox"]:addBox(playerSource, "success", "Você vendeu "..quantidade.."x 'Garrafa de Leite (cheia)' e recebeu $"..(money*quantidade))
+				else
+					exports["Infobox"]:addBox(playerSource, "error", "Você não possui nenhuma 'Garrafa de Leite (cheia)' em sua mochila para vender")
+				end
+			end
+		end
+	end
+end
+addEventHandler("onElementClicked", ped, onClicked)
+-----------------------------------------------------------------------------------------------------------------------------------------
+function cancel(source)
+    local emprego = getElementData(source, "Emprego")
+    if emprego == "Leiteiro" then
+        if isElementVisibleTo(markers[1], source) then
+        	if isTimer(ordenhando[source]) then killTimer(ordenhando[source]) ordenhando[source] = nil end
+			unbindKey(source, "r", "down", ordenhar3)
+			ordenhando[source] = 0
+			tick[source] = nil
+			setPedAnimation(source, nil)
+            removeEventHandler("onPlayerQuit", source, reset)
+            removeEventHandler("onPlayerWasted", source, reset)
+            exports["Infobox"]:addBox(source, "Você parou seu serviço", "success")
+            for i, v in pairs(markers) do
+            	setElementVisibleTo(v, source, false)
+            	removeEventHandler("onMarkerHit", v, ordenhar1)
+            	removeEventHandler("onMarkerLeave", v, ordenhar2)
+            	if isElementWithinMarker(source, v) then
+            		if not isTimer(tempo[v]) then
+            			setElementAlpha(v, 50)
+            		end
+            	end
+            end
+        end
+    end
+end
+addCommandHandler("cancelar", cancel)
+-----------------------------------------------------------------------------------------------------------------------------------------
+function reset()
+    local emprego = getElementData(source, "Emprego")
+    if emprego == "Leiteiro" then
+        if isElementVisibleTo(markers[1], source) then
+        	if isTimer(ordenhando[source]) then killTimer(ordenhando[source]) ordenhando[source] = nil end
+			unbindKey(source, "r", "down", ordenhar3)
+			ordenhando[source] = 0
+			tick[source] = nil
+			setPedAnimation(source, nil)
+            removeEventHandler("onPlayerQuit", source, reset)
+            removeEventHandler("onPlayerWasted", source, reset)
+            exports["Infobox"]:addBox(source, "info", "Você parou seu serviço")
+            for i, v in pairs(markers) do
+            	setElementVisibleTo(v, source, false)
+            	removeEventHandler("onMarkerHit", v, ordenhar1)
+            	removeEventHandler("onMarkerLeave", v, ordenhar2)
+            	if isElementWithinMarker(source, v) then
+            		if not isTimer(tempo[v]) then
+            			setElementAlpha(v, 50)
+            		end
+            	end
+            end
+        end
+    end
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
